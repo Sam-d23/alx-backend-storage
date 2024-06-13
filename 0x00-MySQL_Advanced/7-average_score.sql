@@ -27,16 +27,20 @@ CREATE TABLE IF NOT EXISTS average_scores (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- Create the ComputeAverageScoreForUser stored procedure
+-- Ensure the stored procedure doesn't already exist
+DROP PROCEDURE IF EXISTS ComputeAverageScoreForUser;
+
+-- Change delimiter to define the stored procedure
 DELIMITER $$
 
+-- Create the ComputeAverageScoreForUser stored procedure
 CREATE PROCEDURE ComputeAverageScoreForUser (
     IN user_id INT
 )
 BEGIN
     DECLARE avg_score DECIMAL(5,2);
 
-    -- Compute the average score for the given user
+    -- Calculate the average score for the given user_id
     SELECT AVG(score) INTO avg_score
     FROM corrections
     WHERE user_id = user_id;
@@ -44,8 +48,8 @@ BEGIN
     -- Insert or update the average score in the average_scores table
     INSERT INTO average_scores (user_id, avg_score)
     VALUES (user_id, avg_score)
-    ON DUPLICATE KEY UPDATE avg_score = VALUES(avg_score);
+    ON DUPLICATE KEY UPDATE avg_score = avg_score;
 END $$
 
+-- Reset delimiter to default
 DELIMITER ;
-
