@@ -5,9 +5,7 @@
 DROP FUNCTION IF EXISTS SafeDiv;
 
 -- Create the SafeDiv function
-DELIMITER $$
-
-CREATE FUNCTION SafeDiv (a INT, b INT)
+CREATE FUNCTION SafeDiv(a INT, b INT)
 RETURNS INT
 BEGIN
     DECLARE result INT;
@@ -19,6 +17,4 @@ BEGIN
     END IF;
 
     RETURN result;
-END $$
-
-DELIMITER ;
+END;
