@@ -1,55 +1,23 @@
--- Create the users table
-CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
-);
-
--- Create the projects table
-CREATE TABLE IF NOT EXISTS projects (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE
-);
-
--- Create the corrections table
-CREATE TABLE IF NOT EXISTS corrections (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    project_id INT,
-    score INT,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (project_id) REFERENCES projects(id)
-);
-
--- Create the average_scores table
-CREATE TABLE IF NOT EXISTS average_scores (
-    user_id INT PRIMARY KEY,
-    avg_score DECIMAL(5,2),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
--- Ensure the stored procedure doesn't already exist
+-- Creates a stored procedure that computes
+-- and stores Student's average score
 DROP PROCEDURE IF EXISTS ComputeAverageScoreForUser;
-
--- Change delimiter to define the stored procedure
 DELIMITER $$
-
--- Create the ComputeAverageScoreForUser stored procedure
-CREATE PROCEDURE ComputeAverageScoreForUser (
-    IN user_id INT
-)
+CREATE PROCEDURE ComputeAverageScoreForUser (user_id INT)
 BEGIN
-    DECLARE avg_score DECIMAL(5,2);
+    DECLARE total_score INT DEFAULT 0;
+    DECLARE projects_count INT DEFAULT 0;
 
-    -- Calculate the average score for the given user_id
-    SELECT AVG(score) INTO avg_score
-    FROM corrections
-    WHERE user_id = user_id;
+    SELECT SUM(score)
+        INTO total_score
+        FROM corrections
+        WHERE corrections.user_id = user_id;
+    SELECT COUNT(*)
+        INTO projects_count
+        FROM corrections
+        WHERE corrections.user_id = user_id;
 
-    -- Insert or update the average score in the average_scores table
-    INSERT INTO average_scores (user_id, avg_score)
-    VALUES (user_id, avg_score)
-    ON DUPLICATE KEY UPDATE avg_score = avg_score;
+    UPDATE users
+        SET users.average_score = IF(projects_count = 0, 0, total_score / projects_count)
+        WHERE users.id = user_id;
 END $$
-
--- Reset delimiter to default
 DELIMITER ;
