@@ -1,4 +1,5 @@
---SQL script that ranks country origins of bands
+--SQL script that ranks country origins of bands.
+--The code imports table.
 SELECT origin, SUM(fans) AS nb_fans
     FROM metal_bands
     GROUP BY origin
