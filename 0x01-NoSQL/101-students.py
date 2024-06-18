@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
 """
-Returns all students sorted by averrage score.
+Returns all students sorted by average score.
 """
-
-
-from pymongo import MongoClient
 
 
 def top_students(mongo_collection):
     """
     Script's function.
     """
-    pipeline = [
-        {"$project": {"name": 1, "averageScore": {"$avg": "$scores"}}},
+      return mongo_collection.aggregate([
+        {"$project": {"name": "$name", 
+                      "averageScore": {"$avg": "$topics.score"}}},
         {"$sort": {"averageScore": -1}}
-    ]
-
-    return list(mongo_collection.aggregate(pipeline))
-
-
-if __name__ == "__main__":
-    client = MongoClient('mongodb://localhost:27017/')
-    top_students_data = top_students(client.my_db.students)
-    for student in top_students_data:
-        print(student)
+    ])
