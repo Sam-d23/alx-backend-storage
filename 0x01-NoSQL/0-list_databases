@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+const { MongoClient } = require('mongodb');
+
+async function listDatabases() {
+  const uri = "mongodb://localhost:27017"; // Replace with your MongoDB connection string
+  const client = new MongoClient(uri);
+
+  try {
+    // Connect to the MongoDB server
+    await client.connect();
+
+    // List all databases
+    const databasesList = await client.db().admin().listDatabases();
+
+    console.log("Databases:");
+    databasesList.databases.forEach(db => {
+      console.log(` - ${db.name}`);
+    });
+  } catch (e) {
+    console.error(e);
+  } finally {
+    // Close the connection
+    await client.close();
+  }
+}
+
+listDatabases().catch(console.error);
+
