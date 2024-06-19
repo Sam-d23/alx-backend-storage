@@ -34,3 +34,49 @@ class Cache:
         self._redis.set(key, data)
         return key
 
+    def get(
+        self, key: str, fn: Optional[Callable] = None
+    ) -> Union[str, bytes, int, float, None]:
+        """
+        Retrieve data from Redis by key, optionally
+        using a callable to convert the data.
+
+        Args:
+            key (str): The key of the data to retrieve.
+            fn (Optional[Callable]): A callable to convert
+            the data. Defaults to None.
+
+        Returns:
+            Union[str, bytes, int, float, None]: The retrieved
+            data, optionally converted by fn.
+        """
+        data = self._redis.get(key)
+        if data is not None and fn is not None:
+            return fn(data)
+        return data
+
+    def get_str(self, key: str) -> Optional[str]:
+        """
+        Retrieve a string from Redis by key.
+
+        Args:
+            key (str): The key of the data to retrieve.
+
+        Returns:
+            Optional[str]: The retrieved string data,
+            or None if the key does not exist.
+        """
+        return self.get(key, lambda d: d.decode("utf-8"))
+
+    def get_int(self, key: str) -> Optional[int]:
+        """
+        Retrieve an integer from Redis by key.
+
+        Args:
+            key (str): The key of the data to retrieve.
+
+        Returns:
+            Optional[int]: The retrieved integer data,
+            or None if the key does not exist.
+        """
+        return self.get(key, int)
