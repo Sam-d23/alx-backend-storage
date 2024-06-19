@@ -1,42 +1,35 @@
 #!/usr/bin/env python3
 """
-Caches HTTP requests and tracking access.
+Returns HTML content.
 """
-
-import redis
 import requests
+import redis
 from functools import wraps
-from typing import Callable
 
-# Initializing a Redis client
-redis_client = redis.Redis()
+store = redis.Redis()
 
 
-def track_get_page(fn: Callable) -> Callable:
-    """
-    Decorator of get_page that caches and tracks access.
-    """
-    @wraps(fn)
-    def wrapper(url: str) -> str:
-        """
-        Wrapper which increments access count and caches data.
-        """
-        redis_client.incr(f'count:{url}')
-        cached_page = redis_client.get(url)
-        if cached_page:
-            return cached_page.decode('utf-8')
-        response = fn(url)
-        redis_client.setex(url, 10, response)
-        return response
+def count_url_access(method):
+    """Decorator that counts how many times URL is accessed"""
+    @wraps(method)
+    def wrapper(url):
+        cached_key = "cached:" + url
+        cached_data = store.get(cached_key)
+        if cached_data:
+            return cached_data.decode("utf-8")
 
+        count_key = "count:" + url
+        html = method(url)
+
+        store.incr(count_key)
+        store.set(cached_key, html)
+        store.expire(cached_key, 10)
+        return html
     return wrapper
 
 
-@track_get_page
+@count_url_access
 def get_page(url: str) -> str:
-    """
-    A HTTP GET request is made and returns the response text.
-    """
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.text
+    """HTML content is returned of a url"""
+    res = requests.get(url)
+    return res.text
