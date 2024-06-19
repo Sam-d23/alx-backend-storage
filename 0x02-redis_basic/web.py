@@ -1,38 +1,42 @@
 #!/usr/bin/env python3
-'''A module requesting caching and tracking.
-'''
+"""
+Caches HTTP requests and tracking access.
+"""
+
 import redis
 import requests
 from functools import wraps
 from typing import Callable
 
-
-redis_store = redis.Redis()
-'''Redis instance.
-'''
+# Initializing a Redis client
+redis_client = redis.Redis()
 
 
-def data_cacher(method: Callable) -> Callable:
-    '''The output of fetched data is cached.
-    '''
-    @wraps(method)
-    def invoker(url) -> str:
-        '''The wrapper function.
-        '''
-        redis_store.incr(f'count:{url}')
-        result = redis_store.get(f'result:{url}')
-        if result:
-            return result.decode('utf-8')
-        result = method(url)
-        redis_store.set(f'count:{url}', 0)
-        redis_store.setex(f'result:{url}', 10, result)
-        return result
-    return invoker
+def track_get_page(fn: Callable) -> Callable:
+    """
+    Decorator of get_page that caches and tracks access.
+    """
+    @wraps(fn)
+    def wrapper(url: str) -> str:
+        """
+        Wrapper which increments access count and caches data.
+        """
+        redis_client.incr(f'count:{url}')
+        cached_page = redis_client.get(url)
+        if cached_page:
+            return cached_page.decode('utf-8')
+        response = fn(url)
+        redis_client.setex(url, 10, response)
+        return response
+
+    return wrapper
 
 
-@data_cacher
+@track_get_page
 def get_page(url: str) -> str:
-    '''The content of a URL after caching
-    and tracking the request are returned.
-    '''
-    return requests.get(url).text
+    """
+    A HTTP GET request is made and returns the response text.
+    """
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.text
