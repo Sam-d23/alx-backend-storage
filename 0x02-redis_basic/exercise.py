@@ -1,56 +1,90 @@
 #!/usr/bin/env python3
 """
-Module for caching data in Redis.
+Module for caching data in Redis and counting method calls.
 """
 
 import redis
-import uuid
+from uuid import uuid4
 from typing import Union, Callable, Optional
 from functools import wraps
 
 
 def count_calls(method: Callable) -> Callable:
     """
-    Decorator to count the number of times a method is called.
-
-    Args:
-        method (Callable): The method to wrap.
-
-    Returns:
-        Callable: The wrapped method.
+    Decorator that counts the number of times a method is called.
     """
+    key = method.__qualname__
+
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         """
-        Wrapper function to increment the count for the method call.
-
-        Args:
-            self: The instance of the class.
-            *args: Positional arguments for the method.
-            **kwargs: Keyword arguments for the method.
-
-        Returns:
-            The return value of the wrapped method.
+        Wrapper function to count method calls.
         """
-        key = f"{method.__qualname__}"
         self._redis.incr(key)
         return method(self, *args, **kwargs)
 
     return wrapper
 
 
+def call_history(method: Callable) -> Callable:
+    """
+    Decorator that stores the history of inputs and outputs for a method.
+    """
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        """
+        Wrapper function to store inputs and outputs in Redis.
+        """
+        input_str = str(args)
+        self._redis.rpush(f"{method.__qualname__}:inputs", input_str)
+        output_str = str(method(self, *args, **kwargs))
+        self._redis.rpush(f"{method.__qualname__}:outputs", output_str)
+        return output_str
+
+    return wrapper
+
+
+def replay(fn: Callable):
+    """
+    Display the history of calls for a particular function.
+    """
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    func_name = fn.__qualname__
+    count = r.get(func_name)
+    count = int(count.decode("utf-8")) if count else 0
+    print(f"{func_name} was called {count} times:")
+
+    inputs = r.lrange(f"{func_name}:inputs", 0, -1)
+    outputs = r.lrange(f"{func_name}:outputs", 0, -1)
+    
+    for inp, outp in zip(inputs, outputs):
+        try:
+            inp = inp.decode("utf-8")
+        except Exception:
+            inp = ""
+        try:
+            outp = outp.decode("utf-8")
+        except Exception:
+            outp = ""
+        print(f"{func_name}(*{inp}) -> {outp}")
+
+
 class Cache:
     """
-    Cache class for storing data in Redis with a random key.
+    Cache class for storing data in Redis with
+    counting and history functionalities.
     """
 
     def __init__(self):
         """
-        Initialize the Cache class.
+        Initialize the Cache class with a Redis
+        instance and flush the database.
         """
-        self._redis = redis.Redis()
+        self._redis = redis.Redis(host='localhost', port=6379, db=0)
         self._redis.flushdb()
 
+    @call_history
+    @count_calls
     def store(self, data: Union[str, bytes, int, float]) -> str:
         """
         Store data in Redis with a random key.
@@ -61,32 +95,35 @@ class Cache:
         Returns:
             str: The key under which the data is stored.
         """
-        key = str(uuid.uuid4())
-        self._redis.set(key, data)
-        return key
+        rkey = str(uuid4())
+        self._redis.set(rkey, data)
+        return rkey
 
-    def get(
-        self, key: str, fn: Optional[Callable] = None
-    ) -> Union[str, bytes, int, float, None]:
+    def get(self, key: str,
+            fn: Optional[Callable] = None) -> Union[str, bytes, int, float]:
         """
         Retrieve data from Redis by key, optionally
         using a callable to convert the data.
 
         Args:
             key (str): The key of the data to retrieve.
-            fn (Optional[Callable]): A callable to convert
-            the data. Defaults to None.
+            fn (Optional[Callable]): A callable to
+            convert the data. Defaults to None.
 
         Returns:
-            Union[str, bytes, int, float, None]: The retrieved
-            data, optionally converted by fn.
+            Union[str, bytes, int, float]: The retrieved data,
+            optionally converted by fn.
         """
-        data = self._redis.get(key)
-        if data is not None and fn is not None:
-            return fn(data)
-        return data
+        value = self._redis.get(key)
+        if value is not None and fn:
+            try:
+                value = fn(value)
+            except Exception as e:
+                print(f"Error converting value for key {key}: {e}")
+                value = None
+        return value
 
-    def get_str(self, key: str) -> Optional[str]:
+    def get_str(self, key: str) -> str:
         """
         Retrieve a string from Redis by key.
 
@@ -94,12 +131,18 @@ class Cache:
             key (str): The key of the data to retrieve.
 
         Returns:
-            Optional[str]: The retrieved string data,
-            or None if the key does not exist.
+            str: The retrieved string data, or an
+            empty string if the key does not exist.
         """
-        return self.get(key, lambda d: d.decode("utf-8"))
+        value = self._redis.get(key)
+        if value:
+            try:
+                return value.decode("utf-8")
+            except Exception as e:
+                print(f"Error decoding value for key {key}: {e}")
+        return ""
 
-    def get_int(self, key: str) -> Optional[int]:
+    def get_int(self, key: str) -> int:
         """
         Retrieve an integer from Redis by key.
 
@@ -107,7 +150,13 @@ class Cache:
             key (str): The key of the data to retrieve.
 
         Returns:
-            Optional[int]: The retrieved integer data,
-            or None if the key does not exist.
+            int: The retrieved integer data,
+            or 0 if the key does not exist or conversion fails.
         """
-        return self.get(key, int)
+        value = self._redis.get(key)
+        if value:
+            try:
+                return int(value.decode("utf-8"))
+            except (ValueError, TypeError) as e:
+                print(f"Error converting value for key {key}: {e}")
+        return 0
